@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>保育園 献立表</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- PapaParse for CSV processing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f8fafc; /* Slate-50 */
+            color: #334155; /* Slate-700 */
+        }
+        .calendar-day {
+            aspect-ratio: 1;
+        }
+        .selected-day {
+            background-color: #fbbf24; /* Amber-400 */
+            color: white;
+            font-weight: bold;
+            border-radius: 50%;
+        }
+        .today-marker {
+            border: 2px solid #fbbf24;
+            border-radius: 50%;
+        }
+        .has-menu-marker {
+            position: absolute;
+            bottom: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 4px;
+            background-color: #fbbf24;
+            border-radius: 50%;
+        }
+        /* Hide scrollbar for clean look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- Header / Calendar Navigation -->
+    <div class="bg-white shadow-sm z-10 flex-shrink-0">
+        <div class="max-w-md mx-auto px-4 py-4">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <span id="currentYearMonth">Loading...</span>
+                </h1>
+                <div class="flex gap-2">
+                    <button onclick="changeMonth(-1)" class="p-2 rounded-full hover:bg-slate-100 text-slate-600 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                        </svg>
+                    </button>
+                    <button onclick="goToToday()" class="text-sm font-medium px-3 py-1 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
+                        今日
+                    </button>
+                    <button onclick="changeMonth(1)" class="p-2 rounded-full hover:bg-slate-100 text-slate-600 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Days of Week -->
+            <div class="grid grid-cols-7 text-center mb-2">
+                <div class="text-xs text-rose-500 font-bold">日</div>
+                <div class="text-xs text-slate-400">月</div>
+                <div class="text-xs text-slate-400">火</div>
+                <div class="text-xs text-slate-400">水</div>
+                <div class="text-xs text-slate-400">木</div>
+                <div class="text-xs text-slate-400">金</div>
+                <div class="text-xs text-blue-500 font-bold">土</div>
+            </div>
+
+            <!-- Calendar Grid -->
+            <div id="calendarGrid" class="grid grid-cols-7 text-center gap-y-2 text-sm">
+                <!-- Days will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content: Menu Details -->
+    <div class="flex-1 overflow-y-auto bg-slate-50 relative" id="menuContainer">
+        <div class="max-w-md mx-auto p-6 min-h-full">
+            
+            <!-- Date Display -->
+            <div class="text-center mb-8">
+                <p class="text-sm text-slate-500 font-medium" id="selectedDateLabel">日付を選択してください</p>
+                <h2 class="text-3xl font-bold text-slate-800 mt-1" id="selectedDayLabel">--</h2>
+            </div>
+
+            <!-- Menu Cards -->
+            <div id="menuContent" class="space-y-6 transition-opacity duration-300">
+                <!-- Morning Snack -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1.5 h-full bg-orange-300"></div>
+                    <div class="flex items-start gap-4">
+                        <div class="bg-orange-50 text-orange-500 p-2 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-400 mb-1">朝のおやつ</h3>
+                            <p id="morningSnackText" class="text-lg font-medium text-slate-700 leading-relaxed">--</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lunch -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1.5 h-full bg-emerald-400"></div>
+                    <div class="flex items-start gap-4">
+                        <div class="bg-emerald-50 text-emerald-500 p-2 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-400 mb-1">昼食</h3>
+                            <p id="lunchText" class="text-lg font-medium text-slate-700 leading-relaxed">--</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Afternoon Snack -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1.5 h-full bg-indigo-400"></div>
+                    <div class="flex items-start gap-4">
+                        <div class="bg-indigo-50 text-indigo-500 p-2 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-400 mb-1">3時のおやつ</h3>
+                            <p id="afternoonSnackText" class="text-lg font-medium text-slate-700 leading-relaxed">--</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden flex flex-col items-center justify-center mt-10 text-slate-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <p>この日の献立データはありません</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Fallback Data (Dates restored + Milk/Tea added) ---
+        const fallbackData = `date,morning_snack,lunch,afternoon_snack
+2025-12-01,"牛乳、星たべよ","菜飯、さばの煮付け、ほうれん草の和え物、麩の味噌汁","お茶、チヂミ"
+2025-12-02,"牛乳、アスパラガスビスケット","和風スパゲティー、ブロッコリーのサラダ、野菜スープ","お茶、ゆかりおにぎり"
+2025-12-03,"牛乳、紫芋せんべい","ご飯、豚肉の甘辛煮、白菜の和え物、豆腐の味噌汁","牛乳、ココアクッキー"
+2025-12-04,"牛乳、バナナ","ご飯、チンジャオロース風、中華スープ、黄桃缶","牛乳、コンソメポテト"
+2025-12-05,"牛乳、ぱりんこ","ご飯、鶏のマーマレード焼き、ひじきサラダ、コンソメスープ","牛乳、ジャムサンドパン"
+2025-12-06,"牛乳、ビスコ","焼きそば、中華スープ、青りんごゼリー","牛乳、味しらべ、マンナウエハース"
+2025-12-08,"牛乳、紫芋せんべい","ご飯、納豆、さわらの西京焼き、切干大根の煮物、わかめのすまし汁","牛乳、ホットケーキ"
+2025-12-09,"牛乳、マンナビスケット","お誕生会メニュー、ご飯、小松菜のサラダ、チキン南蛮、オニオンスープ","牛乳、いちごケーキ"
+2025-12-10,"牛乳、バナナ","中華丼、もやしのナムル、中華スープ","牛乳、フルーツ杏仁"
+2025-12-11,"牛乳、星たべよ","ご飯、牛肉のすき煮、スパゲティサラダ、麩の味噌汁","牛乳、コーンフレークマシュマロ"
+2025-12-12,"牛乳、ほうれん草せんべい","郷土料理(愛媛)、八幡浜ちゃんぽん、ほうれん草のごま和え、バナナ","お茶、じゃこおにぎり"
+2025-12-13,"牛乳、ぱりんこ","チャーハン、おさつサラダ、中華スープ","牛乳、ビスケット、ハッピーターン"
+2025-12-15,"牛乳、アスパラガスビスケット","ご飯、白身魚の煮付け、キャベツの和え物、豚汁","牛乳、マーマレードケーキ"
+2025-12-16,"牛乳、紫芋せんべい","ご飯、中華風ローストチキン、春雨サラダ、中華スープ","牛乳、みかん、ハッピーターン"
+2025-12-17,"牛乳、星たべよ","カレーライス、鶏の唐揚げ、ポテト・ブロッコリーのサラダ、オレンジ","牛乳、フルーツポンチ"
+2025-12-18,"牛乳、マンナウエハース","味噌煮込みうどん、ほうれん草の和え物、バナナ","お茶、鮭おにぎり"
+2025-12-19,"牛乳、ほうれん草せんべい","ご飯、星のコロッケ、小松菜のツナ和え、コンソメスープ","牛乳、ココアプリン、ビスケット"
+2025-12-20,"牛乳、マンナビスケット","豚丼、さつま芋の味噌汁、オレンジゼリー","牛乳、ぱりんこ、アスパラガスビスケット"
+2025-12-22,"牛乳、たべっこベイビー","ご飯、赤魚の照り焼き、ほうれん草とコーンの和え物、揚げの味噌汁、パイン缶","牛乳、コロコロドーナツ"
+2025-12-23,"牛乳、星たべよ","ご飯、豚肉と野菜の味噌炒め、マカロニサラダ、豆腐のすまし汁","牛乳、マドレーヌ"
+2025-12-24,"牛乳、紫芋せんべい","牛丼、白菜のおかか和え、大根の味噌汁","お茶、ジャムヨーグルト、ぽたぽた焼き"
+2025-12-25,"牛乳、ほうれん草せんべい","中華そば、焼売、バナナ","お茶、たぬきおにぎり"
+2025-12-26,"牛乳、マンナビスケット","ご飯、鶏の照り焼き、小松菜のごま和え、なめこの味噌汁","牛乳、シュガーパイ"
+2025-12-27,"牛乳、アスパラガスビスケット","牛そぼろ丼、きゅうりとわかめの和え物、さつま芋の味噌汁","牛乳、味しらべ、マンナビスケット"`;
+        // ----------------------------------------------------
+
+        // Global Variables
+        let currentDate; // Date object representing the month being viewed
+        let selectedDate; // Date object representing the selected day
+        let menuData = {}; 
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize dates using JST logic
+            const todayJST = getJSTDate();
+            currentDate = new Date(todayJST);
+            selectedDate = new Date(todayJST);
+
+            fetchAndParseCSV();
+        });
+
+        // --- Timezone Helper: Get Current Time in JST ---
+        function getJSTDate() {
+            // Create a date string in JST
+            const jstString = new Date().toLocaleString("en-US", {timeZone: "Asia/Tokyo"});
+            const jstDate = new Date(jstString);
+            return jstDate;
+        }
+
+        // 1. Fetch and Parse CSV with fallback
+        async function fetchAndParseCSV() {
+            try {
+                // Try to fetch the file
+                const response = await fetch('menu.csv');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const csvText = await response.text();
+                console.log("Loaded menu.csv from file");
+                parseCSVData(csvText);
+            } catch (e) {
+                // If fetch fails (e.g. local preview), use fallback
+                console.warn("Could not load menu.csv (likely due to preview environment). Using fallback data.", e);
+                parseCSVData(fallbackData);
+            }
+        }
+
+        function parseCSVData(csvString) {
+            Papa.parse(csvString, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    processMenuData(results.data);
+                    renderCalendar();
+                    // Select Today (JST)
+                    selectDate(getJSTDate()); 
+                },
+                error: function(err) {
+                    console.error("CSV Parse Error:", err);
+                    alert("データの解析に失敗しました。");
+                }
+            });
+        }
+
+        // 2. Process Data
+        function processMenuData(data) {
+            menuData = {};
+            data.forEach(row => {
+                if (row.date) {
+                    // Assuming date in CSV is "YYYY-MM-DD"
+                    // We treat this string as "Local Date" to avoid timezone shifts
+                    // e.g., "2025-12-01" simply maps to that string key
+                    const dateStr = row.date.trim();
+                    menuData[dateStr] = {
+                        morning: row.morning_snack,
+                        lunch: row.lunch,
+                        snack: row.afternoon_snack
+                    };
+                }
+            });
+        }
+
+        // 3. Render Calendar
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            const currentYearMonth = document.getElementById('currentYearMonth');
+            
+            grid.innerHTML = '';
+            
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth(); 
+            
+            currentYearMonth.textContent = `${year}年 ${month + 1}月`;
+            
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            
+            const startDayOfWeek = firstDay.getDay(); 
+            
+            for (let i = 0; i < startDayOfWeek; i++) {
+                const div = document.createElement('div');
+                div.className = 'calendar-day';
+                grid.appendChild(div);
+            }
+            
+            // Format dates as YYYY-MM-DD for comparison
+            const todayJST = getJSTDate();
+            const todayStr = `${todayJST.getFullYear()}-${String(todayJST.getMonth()+1).padStart(2, '0')}-${String(todayJST.getDate()).padStart(2, '0')}`;
+            
+            const selectedStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth()+1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+
+            for (let d = 1; d <= lastDay.getDate(); d++) {
+                // Create date object for this cell (using local constructor is fine as we only need Y-M-D)
+                const dateObj = new Date(year, month, d);
+                const dateStr = `${year}-${String(month+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                
+                const btn = document.createElement('button');
+                btn.className = `calendar-day relative flex items-center justify-center text-sm rounded-full w-8 h-8 mx-auto transition hover:bg-slate-100`;
+                btn.textContent = d;
+                
+                if (dateStr === todayStr) {
+                    btn.classList.add('today-marker', 'text-amber-600', 'font-bold');
+                } else {
+                    btn.classList.add('text-slate-700');
+                }
+
+                if (dateStr === selectedStr) {
+                    btn.classList.add('selected-day');
+                    btn.classList.remove('text-slate-700', 'text-amber-600', 'today-marker');
+                }
+
+                if (menuData[dateStr]) {
+                    const dot = document.createElement('div');
+                    dot.className = 'has-menu-marker';
+                    if (dateStr !== selectedStr) {
+                        btn.appendChild(dot);
+                    }
+                }
+
+                btn.onclick = () => selectDate(dateObj);
+                
+                grid.appendChild(btn);
+            }
+        }
+
+        // 4. Select Date Logic
+        function selectDate(date) {
+            selectedDate = date;
+            
+            // Switch view if selected date is in another month
+            // Note: date.getMonth() depends on how 'date' was constructed.
+            // Since we pass new Date(year, month, d), it's consistent.
+            if (date.getMonth() !== currentDate.getMonth() || date.getFullYear() !== currentDate.getFullYear()) {
+                currentDate = new Date(date.getFullYear(), date.getMonth(), 1);
+                renderCalendar();
+            } else {
+                renderCalendar();
+            }
+
+            updateMenuDisplay(date);
+        }
+
+        // 5. Update Menu Display Area
+        function updateMenuDisplay(date) {
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            
+            const days = ['日', '月', '火', '水', '木', '金', '土'];
+            const dayOfWeek = days[date.getDay()];
+            
+            document.getElementById('selectedDateLabel').textContent = `${year}年`;
+            document.getElementById('selectedDayLabel').textContent = `${month}月 ${day}日 (${dayOfWeek})`;
+
+            const menu = menuData[dateStr];
+            const menuContent = document.getElementById('menuContent');
+            const emptyState = document.getElementById('emptyState');
+
+            if (menu) {
+                menuContent.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+                
+                // Reset animation
+                menuContent.style.opacity = '0';
+                setTimeout(() => menuContent.style.opacity = '1', 50);
+
+                document.getElementById('morningSnackText').textContent = menu.morning || 'なし';
+                document.getElementById('lunchText').textContent = menu.lunch || 'なし';
+                document.getElementById('afternoonSnackText').textContent = menu.snack || 'なし';
+            } else {
+                menuContent.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+            }
+        }
+
+        function changeMonth(delta) {
+            currentDate.setMonth(currentDate.getMonth() + delta);
+            renderCalendar();
+        }
+
+        function goToToday() {
+            const today = getJSTDate();
+            currentDate = new Date(today); 
+            selectDate(today);
+        }
+    </script>
+</body>
+</html>
